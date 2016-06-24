@@ -22,10 +22,35 @@
 			top: 50%;
 			transform: translate3d(-50%, -50%, 0);
 		}
+		#progress::after {
+			position: absolute;
+			height: 50px; width: 50px;
+			border-radius: 50%;
+			background: #fff;
+			content: '';
+			transform: scale(0);
+		}
+		#progress {
+			position: absolute;
+			left: 50%; top: 50%;
+			height: 50px; width: 50px;
+			border-radius: 50%;
+			border: 2px solid #fff;
+			opacity: 0;
+			transform: translate3d(-50%, -50%, 0);
+		}
+		#progress.show {
+			opacity: 0.8;
+		}
+		#progress.show::after {
+			transform: scale(1);
+			transition: transform 400ms linear;
+		}
 	</style>
 </head>
 <body>
 <div id="crosshair">+</div>
+<div id="progress"></div>
 <script src="three.js"></script>
 <script src="physi.js"></script>
 <script src="pointerLock.js"></script>
@@ -38,21 +63,22 @@
 	Physijs.scripts.worker = '/physi_worker.js';
 	Physijs.scripts.ammo = '/ammo.js';
 
-	var scene, camera, renderer, controls, raycaster, spotLight, cursor, windowHeight, windowWidth;
+	var scene, camera, renderer, controls, raycaster, spotLight, cursor, windowHeight, windowWidth, progress;
 	var moveForward, moveBackward, moveLeft, moveRight, canJump, playerHeight, prevTime, velocity, cubes, player;
+	var geometryBlock, geometryWater, materials;
 
 	function init () {
 		// init threejs
-		// var scene = new THREE.Scene();
 		scene = new Physijs.Scene;
 		windowHeight = window.innerHeight;
 		windowWidth = window.innerWidth;
 
-		camera = new THREE.PerspectiveCamera(60, windowWidth / windowHeight, 0.3, 50);
+		camera = new THREE.PerspectiveCamera(60, windowWidth / windowHeight, 0.3, 20);
 		renderer = new THREE.WebGLRenderer();
 		controls = new THREE.PointerLockControls(camera);
 		raycaster = new THREE.Raycaster();
 		cursor = new THREE.Vector2();
+		progress = document.getElementById('progress');
 
 		// controls
 		moveForward = false;
@@ -65,44 +91,11 @@
 		velocity = new THREE.Vector3();
 		cubes = [];
 
-//		 scene.setGravity(new THREE.Vector3( 0, -100, 0 ));
 		scene.addEventListener('update', function () {
-			controls.enabled && scene.simulate(undefined, 1);
+			controls.enabled && scene.simulate();
 		});
 
-		function onMouseClick(event) {
-//			cursor.x = (event.clientX / windowWidth) * 2 - 1;
-//			cursor.y = (event.clientY / windowHeight) * 2 - 1;
-			raycaster.ray.origin.copy(controls.getObject().position);
-			raycaster.ray.direction.copy(camera.getWorldDirection());
-			raycaster.ray.far = 3;
-			var intersections = raycaster.intersectObjects(cubes);
-//			intersections.length && console.log(intersections[0].distance);
-			if(intersections.length) {
-				var objectPointedAt = intersections[0].object;
-				var outline = new Physijs.BoxMesh(geometryBlock, materials['blockDirt'], 0);
-				outline.position.set(objectPointedAt.position.x, objectPointedAt.position.y + 1, objectPointedAt.position.z);
-//				console.log(objectPointedAt.position);
-				cubes.push(outline);
-				scene.add(outline);
-				console.log('added');
-			}
-		}
-		window.addEventListener('click', onMouseClick);
-
-		function request () {
-			var element = renderer.domElement;
-			document.addEventListener('pointerlockchange', function (event) {
-				controls.enabled = document.pointerLockElement === element;
-			}, false);
-
-			if ('pointerLockElement' in document) {
-				element.requestPointerLock();
-			}
-			document.removeEventListener('click', request);
-		};
-
-		document.addEventListener('click', request, false);
+//		scene.setGravity(0, 0, 0);
 
 		scene.add(controls.getObject());
 		renderer.setSize(window.innerWidth, window.innerHeight);
@@ -111,8 +104,6 @@
 		renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 		renderer.shadowMap.renderReverseSided = false;
 		document.body.appendChild(renderer.domElement);
-		// camera.position.set(0, 1, 20);
-		// camera.lookAt({x: 0, y: 0, z: 0});
 
 		// var axisHelper = new THREE.AxisHelper( 50 );
 		// scene.add( axisHelper );
@@ -123,7 +114,7 @@
 		spotLight = new THREE.SpotLight(0x999999);
 		spotLight.position.set(30, 20, 0);
 		spotLight.castShadow = true;
-		spotLight.shadow.darkness = 0.3;
+		spotLight.shadow.darkness = 0.1;
 		spotLight.shadow.camera.near = 10;
 		spotLight.shadow.camera.far = 50;
 		spotLight.shadow.camera.fov = 80;
@@ -136,9 +127,10 @@
 
 		// load textures
 		var loader = new THREE.TextureLoader();
-		var texture_grass_top = new THREE.MeshLambertMaterial(),
-				texture_grass_side = new THREE.MeshLambertMaterial(),
-				texture_dirt = new THREE.MeshLambertMaterial();
+		var texture_grass_top = Physijs.createMaterial(new THREE.MeshLambertMaterial(), 0.6, 0.3),
+				texture_grass_side = Physijs.createMaterial(new THREE.MeshLambertMaterial(), 0.6, 0.3),
+				texture_water = Physijs.createMaterial(new THREE.MeshLambertMaterial(), 0.6, 0.3),
+				texture_dirt = Physijs.createMaterial(new THREE.MeshLambertMaterial(), 0.6, 0.3);
 
 		loader.load('/images/grass.png', function (texture) {
 			texture_grass_top.map = texture;
@@ -152,13 +144,20 @@
 			texture_dirt.map = texture;
 			texture_dirt.needsUpdate = true;
 		});
+		loader.load('/images/water.jpg', function (texture) {
+			texture_water.map = texture;
+			texture_water.transparent = true;
+			texture_water.opacity = 0.7;
+			texture_water.needsUpdate = true;
+		});
 
 		// init terrain
-		var geometryBlock = new THREE.BoxGeometry(1, 1, 1);
-		var geometryWater = new THREE.BoxGeometry(1, 0.8, 1);
-		var materials = {
+		geometryBlock = new THREE.BoxGeometry(1, 1, 1);
+		geometryWater = new THREE.BoxGeometry(1, 0.8, 1);
+		materials = {
 			blockGrass: new THREE.MeshFaceMaterial([texture_grass_side, texture_grass_side, texture_grass_top, texture_dirt, texture_grass_side, texture_grass_side]),
-			blockDirt: new THREE.MeshFaceMaterial([texture_dirt, texture_dirt, texture_dirt, texture_dirt, texture_dirt, texture_dirt])
+			blockDirt: new THREE.MeshFaceMaterial([texture_dirt, texture_dirt, texture_dirt, texture_dirt, texture_dirt, texture_dirt]),
+			blockWater: new THREE.MeshFaceMaterial([texture_water, texture_water, texture_water, texture_water, texture_water, texture_water])
 		};
 
 
@@ -183,17 +182,18 @@
 					var cube2 = null;
 					if (h === height) {
 						if(h === 0) {
-							cube = new Physijs.BoxMesh(geometryBlock, materials['blockDirt'], 0);
-							cube2 = new Physijs.BoxMesh(geometryWater, new THREE.MeshBasicMaterial({color: 0x006cb4, transparent: true, opacity: 0.7}), 0);
+							cube = new Physijs.BoxMesh(geometryBlock, texture_dirt, 0);
+							cube2 = new Physijs.BoxMesh(geometryWater, texture_water, 0);
 						} else {
 							cube = new Physijs.BoxMesh(geometryBlock, materials['blockGrass'], 0);
 						}
 					} else {
-						cube = new Physijs.BoxMesh(geometryBlock, materials['blockDirt'], 0);
+						cube = new Physijs.BoxMesh(geometryBlock, texture_dirt, 0);
 					}
 					cube.castShadow = true;
 					cube.receiveShadow = true;
 					cube.position.set(16 - i, h, 16 - j);
+					cube.collisions = 0;
 					cubes.push(cube);
 					scene.add(cube);
 
@@ -205,23 +205,43 @@
 			}
 		}
 
-		player = new Physijs.BoxMesh(geometryBlock, materials['blockDirt']);
+		player = new Physijs.BoxMesh(geometryBlock, texture_dirt);
+
+		player.addEventListener('collision', function (a, b, c, d) {
+			console.log('collision', a, b, c, d);
+		});
 		player.position.set(0, 10, -10);
 		player.castShadow = true;
-		player.addEventListener('collision', function (a, b, c, d) {
-			console.log('collision');
-		});
-		player.addEventListener('ready', function (a, b, c, d) {
-			console.log('player ready');
-		});
+		player.rotation.set(
+				Math.random() * Math.PI,
+				Math.random() * Math.PI,
+				Math.random() * Math.PI
+		);
 		scene.add(player);
+//		player.setCcdMotionThreshold(1);
+//		player.setCcdSweptSphereRadius(0.2);
 
 		render();
 		scene.simulate();
 	}
 
+	function getObjectAtCursor() {
+		raycaster.ray.origin.copy(controls.getObject().position);
+		raycaster.ray.direction.copy(camera.getWorldDirection());
+		// raycaster.ray.far = 3;
+		var intersections = raycaster.intersectObjects(scene.children);
+		if(intersections.length) {
+			return intersections[0].object;
+		}
+		return null;
+	}
+
+	function removeObject(object) {
+		object && scene.remove(object);
+	}
+
 	// game loop
-	var startTime = Date.now();
+//	var startTime = Date.now();
 	function render () {
 		requestAnimationFrame(render);
 		checkControls();

@@ -46,13 +46,69 @@ function checkControls() {
 		prevTime = time;
 	}
 };
-var onKeyDown = function ( event ) {
 
+var timer1, timer2;
+
+function addTimers() {
+	timer1 = setTimeout(function() {
+		progress.classList.add('show');
+		timer2 = setTimeout(function () {
+			progress.classList.remove('show');
+			removeObject(getObjectAtCursor());
+		}, 370);
+	}, 30);
+}
+
+window.addEventListener('mousedown', function(event) {
+	if(event.which === 1) {
+		addTimers();
+	}
+});
+window.addEventListener('mousemove', function(event) {
+	if(timer1 || timer2) {
+		progress.classList.remove('show');
+		clearTimeout(timer1);
+		clearTimeout(timer2);
+	}
+});
+window.addEventListener('mouseup', function(event) {
+	progress.classList.remove('show');
+	clearTimeout(timer1);
+	clearTimeout(timer2);
+	if(event.which === 3) {
+		var obj = getObjectAtCursor();
+		if(obj) {
+			var outline = new Physijs.BoxMesh(geometryBlock, materials['blockDirt'], 0);
+			outline.castShadow = true;
+			outline.receiveShadow = true;
+			outline.position.set(obj.position.x, obj.position.y + 1, obj.position.z);
+			scene.add(outline);
+		}
+	}
+});
+
+function request () {
+	var element = renderer.domElement;
+	document.addEventListener('pointerlockchange', function (event) {
+		controls.enabled = document.pointerLockElement === element;
+	}, false);
+
+	if ('pointerLockElement' in document) {
+		element.requestPointerLock();
+	}
+	document.removeEventListener('click', request);
+};
+
+document.addEventListener('click', request, false);
+
+var onKeyDown = function ( event ) {
+	console.log(player._physijs);
 	switch ( event.keyCode ) {
 
 		case 38: // up
 		case 87: // w
 		moveForward = true;
+		//console.log(player._physijs);
 		break;
 
 		case 37: // left
@@ -73,6 +129,23 @@ var onKeyDown = function ( event ) {
 		if ( canJump === true ) velocity.y += 12;
 		canJump = false;
 		break;
+
+		case 73:
+			player.__dirtyPosition = true;
+			player.position.x += 0.5;
+		break;
+		case 74:
+			player.__dirtyPosition = true;
+			player.position.z += 0.5;
+			break;
+		case 75:
+			player.__dirtyPosition = true;
+			player.position.x -= 0.5;
+			break;
+		case 76:
+			player.__dirtyPosition = true;
+			player.position.z -= 0.5;
+			break;
 
 	}
 

@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset=utf-8>
+	<title>Minecraft</title>
+	<style>
+		body {
+			margin: 0;
+		}
+
+		canvas {
+			width: 100%;
+			height: 100%
+		}
+
+		#crosshair {
+			position: absolute;
+			color: #fff;
+			font-size: 20px;
+			font-weight: bold;
+			left: 50%;
+			top: 50%;
+			transform: translate3d(-50%, -50%, 0);
+		}
+	</style>
+</head>
+<body>
+<div id="crosshair">+</div>
+<script src="three.js"></script>
+<script src="physi.js"></script>
+<script src="pointerLock.js"></script>
+<script src="terrain.js"></script>
+<script src="noise.js"></script>
+<script src="luminance.js"></script>
+<script src="controls.js"></script>
+<script>
+	'use strict';
+	Physijs.scripts.worker = '/physi_worker.js';
+	Physijs.scripts.ammo = '/ammo.js';
+
+	var scene, camera, renderer, controls, raycaster, spotLight, cursor, windowHeight, windowWidth;
+	var moveForward, moveBackward, moveLeft, moveRight, canJump, playerHeight, prevTime, velocity, cubes, player;
+
+	function init () {
+		// init threejs
+		// var scene = new THREE.Scene();
+		scene = new Physijs.Scene;
+		windowHeight = window.innerHeight;
+		windowWidth = window.innerWidth;
+
+		camera = new THREE.PerspectiveCamera(60, windowWidth / windowHeight, 0.3, 50);
+		renderer = new THREE.WebGLRenderer();
+		controls = new THREE.PointerLockControls(camera);
+		raycaster = new THREE.Raycaster();
+		cursor = new THREE.Vector2();
+
+		// controls
+		moveForward = false;
+		moveBackward = false;
+		moveLeft = false;
+		moveRight = false;
+		canJump = false;
+		playerHeight = 6;
+		prevTime = performance.now();
+		velocity = new THREE.Vector3();
+		cubes = [];
+
+//		 scene.setGravity(new THREE.Vector3( 0, -100, 0 ));
+		scene.addEventListener('update', function () {
+			controls.enabled && scene.simulate(undefined, 1);
+		});
+
+		function onMouseClick(event) {
+//			cursor.x = (event.clientX / windowWidth) * 2 - 1;
+//			cursor.y = (event.clientY / windowHeight) * 2 - 1;
+			raycaster.ray.origin.copy(controls.getObject().position);
+			raycaster.ray.direction.copy(camera.getWorldDirection());
+			raycaster.ray.far = 3;
+			var intersections = raycaster.intersectObjects(cubes);
+//			intersections.length && console.log(intersections[0].distance);
+			if(intersections.length) {
+				var objectPointedAt = intersections[0].object;
+				var outline = new Physijs.BoxMesh(geometryBlock, materials['blockDirt'], 0);
+				outline.position.set(objectPointedAt.position.x, objectPointedAt.position.y + 1, objectPointedAt.position.z);
+//				console.log(objectPointedAt.position);
+				cubes.push(outline);
+				scene.add(outline);
+				console.log('added');
+			}
+		}
+		window.addEventListener('click', onMouseClick);
+
+		function request () {
+			var element = renderer.domElement;
+			document.addEventListener('pointerlockchange', function (event) {
+				controls.enabled = document.pointerLockElement === element;
+			}, false);
+
+			if ('pointerLockElement' in document) {
+				element.requestPointerLock();
+			}
+			document.removeEventListener('click', request);
+		};
+
+		document.addEventListener('click', request, false);
+
+		scene.add(controls.getObject());
+		renderer.setSize(window.innerWidth, window.innerHeight);
+		renderer.shadowMap.enabled = true;
+		renderer.shadowMap.soft = false;
+		renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+		renderer.shadowMap.renderReverseSided = false;
+		document.body.appendChild(renderer.domElement);
+		// camera.position.set(0, 1, 20);
+		// camera.lookAt({x: 0, y: 0, z: 0});
+
+		// var axisHelper = new THREE.AxisHelper( 50 );
+		// scene.add( axisHelper );
+
+		// init lighting
+		var ambientLight = new THREE.AmbientLight(0x666666);
+		scene.add(ambientLight);
+		spotLight = new THREE.SpotLight(0x999999);
+		spotLight.position.set(30, 20, 0);
+		spotLight.castShadow = true;
+		spotLight.shadow.darkness = 0.3;
+		spotLight.shadow.camera.near = 10;
+		spotLight.shadow.camera.far = 50;
+		spotLight.shadow.camera.fov = 80;
+		spotLight.shadow.mapSize.width = 1024;
+		spotLight.shadow.mapSize.height = 1024;
+		spotLight.shadow.bias = -0.002;
+		scene.add(spotLight);
+		// scene.add(new THREE.DirectionalLightHelper(directionalLight1));
+		// scene.add(new THREE.CameraHelper( spotLight.shadow.camera ));
+
+		// load textures
+		var loader = new THREE.TextureLoader();
+		var texture_grass_top = new THREE.MeshLambertMaterial(),
+				texture_grass_side = new THREE.MeshLambertMaterial(),
+				texture_dirt = new THREE.MeshLambertMaterial();
+
+		loader.load('/images/grass.png', function (texture) {
+			texture_grass_top.map = texture;
+			texture_grass_top.needsUpdate = true;
+		});
+		loader.load('/images/grass_dirt.png', function (texture) {
+			texture_grass_side.map = texture;
+			texture_grass_side.needsUpdate = true;
+		});
+		loader.load('/images/dirt.png', function (texture) {
+			texture_dirt.map = texture;
+			texture_dirt.needsUpdate = true;
+		});
+
+		// init terrain
+		var geometryBlock = new THREE.BoxGeometry(1, 1, 1);
+		var geometryWater = new THREE.BoxGeometry(1, 0.8, 1);
+		var materials = {
+			blockGrass: new THREE.MeshFaceMaterial([texture_grass_side, texture_grass_side, texture_grass_top, texture_dirt, texture_grass_side, texture_grass_side]),
+			blockDirt: new THREE.MeshFaceMaterial([texture_dirt, texture_dirt, texture_dirt, texture_dirt, texture_dirt, texture_dirt])
+		};
+
+
+		// perlin noise terrain
+		var terrain = [];
+		noise.seed(Math.random());
+		for (var x = 0; x < 32; x++) {
+			terrain[x] = [];
+			for (var y = 0; y < 32; y++) {
+				var value = Math.floor(Math.abs(noise.perlin2(x / 32, y / 32)) * 10);
+				terrain[x][y] = value;
+			}
+		}
+
+		// diamond square terrain
+		// var terrain = diamondSquareTerrain(5);
+		for (var i = 0; i < terrain.length; i++) {
+			for (var j = 0; j < terrain[i].length; j++) {
+				var height = terrain[i][j];
+				var cube;
+				for (var h = 0; h <= height; h++) {
+					var cube2 = null;
+					if (h === height) {
+						if(h === 0) {
+							cube = new Physijs.BoxMesh(geometryBlock, materials['blockDirt'], 0);
+							cube2 = new Physijs.BoxMesh(geometryWater, new THREE.MeshBasicMaterial({color: 0x006cb4, transparent: true, opacity: 0.7}), 0);
+						} else {
+							cube = new Physijs.BoxMesh(geometryBlock, materials['blockGrass'], 0);
+						}
+					} else {
+						cube = new Physijs.BoxMesh(geometryBlock, materials['blockDirt'], 0);
+					}
+					cube.castShadow = true;
+					cube.receiveShadow = true;
+					cube.position.set(16 - i, h, 16 - j);
+					cubes.push(cube);
+					scene.add(cube);
+
+					if(cube2) {
+						cube2.position.set(16 - i, h + 1 - 0.1, 16 - j);
+						scene.add(cube2);
+					}
+				}
+			}
+		}
+
+		player = new Physijs.BoxMesh(geometryBlock, materials['blockDirt']);
+		player.position.set(0, 10, -10);
+		player.castShadow = true;
+		player.addEventListener('collision', function (a, b, c, d) {
+			console.log('collision');
+		});
+		player.addEventListener('ready', function (a, b, c, d) {
+			console.log('player ready');
+		});
+		scene.add(player);
+
+		render();
+		scene.simulate();
+	}
+
+	// game loop
+	var startTime = Date.now();
+	function render () {
+		requestAnimationFrame(render);
+		checkControls();
+//		 var currentTime = Date.now();
+//		 var elapsedTime = (currentTime - startTime)/1000;
+//		 var localTime = ((elapsedTime % 1200) / 1200) + 0.85;
+//		 spotLight.position.y = 30 * Math.cos(localTime * 2 * Math.PI);
+//		 spotLight.position.x = 30 * Math.sin(localTime * 2 * Math.PI);
+		renderer.render(scene, camera);
+	}
+
+	window.onload = init();
+
+
+</script>
+</body>
+</html>

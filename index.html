@@ -52,28 +52,27 @@
 <div id="crosshair">+</div>
 <div id="progress"></div>
 <script src="three.js"></script>
-<script src="physi.js"></script>
 <script src="pointerLock.js"></script>
 <script src="terrain.js"></script>
 <script src="noise.js"></script>
 <script src="luminance.js"></script>
 <script src="controls.js"></script>
+<script src="stats.js"></script>
 <script>
 	'use strict';
-	Physijs.scripts.worker = '/physi_worker.js';
-	Physijs.scripts.ammo = '/ammo.js';
 
 	var scene, camera, renderer, controls, raycaster, spotLight, cursor, windowHeight, windowWidth, progress;
-	var moveForward, moveBackward, moveLeft, moveRight, canJump, playerHeight, prevTime, velocity, cubes, player;
-	var geometryBlock, geometryWater, materials;
+	var moveForward, moveBackward, moveLeft, moveRight, canJump, playerHeight, prevTime, velocity, cubes, player, speed;
+	var geometryBlock, geometryWater, materials, terrain = [], arrowHelper;
+	var mapSize = 32, stats;
 
 	function init () {
 		// init threejs
-		scene = new Physijs.Scene;
+		scene = new THREE.Scene;
 		windowHeight = window.innerHeight;
 		windowWidth = window.innerWidth;
 
-		camera = new THREE.PerspectiveCamera(60, windowWidth / windowHeight, 0.3, 20);
+		camera = new THREE.PerspectiveCamera(60, windowWidth / windowHeight, 0.2, 30);
 		renderer = new THREE.WebGLRenderer();
 		controls = new THREE.PointerLockControls(camera);
 		raycaster = new THREE.Raycaster();
@@ -85,52 +84,53 @@
 		moveBackward = false;
 		moveLeft = false;
 		moveRight = false;
-		canJump = false;
-		playerHeight = 6;
+		canJump = true;
+		playerHeight = 2;
 		prevTime = performance.now();
 		velocity = new THREE.Vector3();
+		speed = 0.1;
 		cubes = [];
 
-		scene.addEventListener('update', function () {
-			controls.enabled && scene.simulate();
-		});
-
-//		scene.setGravity(0, 0, 0);
-
 		scene.add(controls.getObject());
-		renderer.setSize(window.innerWidth, window.innerHeight);
+		controls.getObject().position.set(mapSize/2, 2, mapSize/2);
+		renderer.setPixelRatio( 1 );
+		renderer.setSize(windowWidth, windowHeight);
 		renderer.shadowMap.enabled = true;
 		renderer.shadowMap.soft = false;
 		renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 		renderer.shadowMap.renderReverseSided = false;
 		document.body.appendChild(renderer.domElement);
+		stats = new Stats();
+		document.body.appendChild( stats.dom );
 
-		// var axisHelper = new THREE.AxisHelper( 50 );
-		// scene.add( axisHelper );
+
+//		 var axisHelper = new THREE.AxisHelper( 50 );
+//		 scene.add( axisHelper );
 
 		// init lighting
 		var ambientLight = new THREE.AmbientLight(0x666666);
 		scene.add(ambientLight);
 		spotLight = new THREE.SpotLight(0x999999);
-		spotLight.position.set(30, 20, 0);
+		spotLight.position.set(70, 50, 0);
 		spotLight.castShadow = true;
 		spotLight.shadow.darkness = 0.1;
-		spotLight.shadow.camera.near = 10;
-		spotLight.shadow.camera.far = 50;
+		spotLight.shadow.camera.near = 30;
+		spotLight.shadow.camera.far = 100;
 		spotLight.shadow.camera.fov = 80;
 		spotLight.shadow.mapSize.width = 1024;
 		spotLight.shadow.mapSize.height = 1024;
 		spotLight.shadow.bias = -0.002;
 		scene.add(spotLight);
-		// scene.add(new THREE.DirectionalLightHelper(directionalLight1));
-		// scene.add(new THREE.CameraHelper( spotLight.shadow.camera ));
+//		 scene.add(new THREE.DirectionalLightHelper(directionalLight1));
+		 scene.add(new THREE.CameraHelper( spotLight.shadow.camera ));
+//		scene.fog = new THREE.Fog(0x000000, 5, 20);
 
 		// load textures
 		var loader = new THREE.TextureLoader();
-		var texture_grass_top = Physijs.createMaterial(new THREE.MeshLambertMaterial(), 0.6, 0.3),
-				texture_grass_side = Physijs.createMaterial(new THREE.MeshLambertMaterial(), 0.6, 0.3),
-				texture_water = Physijs.createMaterial(new THREE.MeshLambertMaterial(), 0.6, 0.3),
-				texture_dirt = Physijs.createMaterial(new THREE.MeshLambertMaterial(), 0.6, 0.3);
+		var texture_grass_top = new THREE.MeshLambertMaterial(),
+				texture_grass_side = new THREE.MeshLambertMaterial(),
+				texture_water = new THREE.MeshLambertMaterial(),
+				texture_dirt = new THREE.MeshLambertMaterial();
 
 		loader.load('/images/grass.png', function (texture) {
 			texture_grass_top.map = texture;
@@ -162,12 +162,12 @@
 
 
 		// perlin noise terrain
-		var terrain = [];
+
 		noise.seed(Math.random());
-		for (var x = 0; x < 32; x++) {
+		for (var x = 0; x < mapSize; x++) {
 			terrain[x] = [];
-			for (var y = 0; y < 32; y++) {
-				var value = Math.floor(Math.abs(noise.perlin2(x / 32, y / 32)) * 10);
+			for (var y = 0; y < mapSize; y++) {
+				var value = Math.floor(Math.abs(noise.perlin2(x / mapSize, y / mapSize)) * 20);
 				terrain[x][y] = value;
 			}
 		}
@@ -182,47 +182,35 @@
 					var cube2 = null;
 					if (h === height) {
 						if(h === 0) {
-							cube = new Physijs.BoxMesh(geometryBlock, texture_dirt, 0);
-							cube2 = new Physijs.BoxMesh(geometryWater, texture_water, 0);
+							cube = new THREE.Mesh(geometryBlock, texture_dirt, 0);
+							cube2 = new THREE.Mesh(geometryWater, texture_water, 0);
 						} else {
-							cube = new Physijs.BoxMesh(geometryBlock, materials['blockGrass'], 0);
+							cube = new THREE.Mesh(geometryBlock, materials['blockGrass'], 0);
 						}
 					} else {
-						cube = new Physijs.BoxMesh(geometryBlock, texture_dirt, 0);
+						cube = new THREE.Mesh(geometryBlock, texture_dirt, 0);
 					}
 					cube.castShadow = true;
 					cube.receiveShadow = true;
-					cube.position.set(16 - i, h, 16 - j);
-					cube.collisions = 0;
-					cubes.push(cube);
+					cube.position.set(i + 0.5, h, j + 0.5);
+//					cubes.push(cube);
 					scene.add(cube);
 
 					if(cube2) {
-						cube2.position.set(16 - i, h + 1 - 0.1, 16 - j);
+						cube2.position.set(i + 0.5, h + 1 - 0.1, j + 0.5);
 						scene.add(cube2);
 					}
 				}
 			}
 		}
 
-		player = new Physijs.BoxMesh(geometryBlock, texture_dirt);
-
-		player.addEventListener('collision', function (a, b, c, d) {
-			console.log('collision', a, b, c, d);
-		});
-		player.position.set(0, 10, -10);
-		player.castShadow = true;
-		player.rotation.set(
-				Math.random() * Math.PI,
-				Math.random() * Math.PI,
-				Math.random() * Math.PI
-		);
-		scene.add(player);
-//		player.setCcdMotionThreshold(1);
-//		player.setCcdSweptSphereRadius(0.2);
+//		player = new THREE.Mesh(geometryBlock, texture_dirt);
+//
+//		player.position.set(0, 10, -10);
+//		player.castShadow = true;
+//		scene.add(player);
 
 		render();
-		scene.simulate();
 	}
 
 	function getObjectAtCursor() {
@@ -238,18 +226,78 @@
 
 	function removeObject(object) {
 		object && scene.remove(object);
+//		var pos = object.position;
+//		terrain[Math.floor(pos.x)][Math.floor(pos.z)]--;
 	}
 
 	// game loop
 //	var startTime = Date.now();
+	var prevTime;
 	function render () {
+		var prevx = Math.floor(controls.getObject().position.x);
+		var prevz = Math.floor(controls.getObject().position.z);
+		var prevcellHeight = terrain[prevx][prevz];
+
 		requestAnimationFrame(render);
-		checkControls();
+//		checkControls();
 //		 var currentTime = Date.now();
 //		 var elapsedTime = (currentTime - startTime)/1000;
 //		 var localTime = ((elapsedTime % 1200) / 1200) + 0.85;
 //		 spotLight.position.y = 30 * Math.cos(localTime * 2 * Math.PI);
 //		 spotLight.position.x = 30 * Math.sin(localTime * 2 * Math.PI);
+
+		if(moveForward) {
+			controls.getObject().translateZ(-speed);
+		}
+		if(moveBackward) {
+			controls.getObject().translateZ(speed);
+		}
+		if(moveLeft) {
+			controls.getObject().translateX(-speed);
+		}
+		if(moveRight) {
+			controls.getObject().translateX(speed);
+		}
+
+		var x = Math.floor(controls.getObject().position.x);
+		var z = Math.floor(controls.getObject().position.z);
+		var cellheight = terrain[x][z];
+
+		if(cellheight > prevcellHeight && canJump) {
+			if(moveForward) {
+				controls.getObject().translateZ(speed);
+			}
+			if(moveBackward) {
+				controls.getObject().translateZ(-speed);
+			}
+			if(moveLeft) {
+				controls.getObject().translateX(speed);
+			}
+			if(moveRight) {
+				controls.getObject().translateX(-speed);
+			}
+		}
+
+		x = Math.floor(controls.getObject().position.x);
+		z = Math.floor(controls.getObject().position.z);
+		cellheight = terrain[x][z];
+
+		var time = performance.now();
+		var delta = ( time - prevTime ) / 1000;
+
+		velocity.y -= 35 * delta;
+		controls.getObject().translateY( velocity.y * delta );
+
+		if ( controls.getObject().position.y < cellheight + playerHeight ) {
+
+			velocity.y = 0;
+			controls.getObject().position.y = cellheight + playerHeight;
+			canJump = true;
+
+		}
+		prevTime = time;
+
+		stats.update();
 		renderer.render(scene, camera);
 	}
 

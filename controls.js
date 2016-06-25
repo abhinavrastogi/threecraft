@@ -78,7 +78,7 @@ window.addEventListener('mouseup', function(event) {
 	if(event.which === 3) {
 		var obj = getObjectAtCursor();
 		if(obj) {
-			var outline = new Physijs.BoxMesh(geometryBlock, materials['blockDirt'], 0);
+			var outline = new THREE.Mesh(geometryBlock, materials['blockDirt'], 0);
 			outline.castShadow = true;
 			outline.receiveShadow = true;
 			outline.position.set(obj.position.x, obj.position.y + 1, obj.position.z);
@@ -102,7 +102,6 @@ function request () {
 document.addEventListener('click', request, false);
 
 var onKeyDown = function ( event ) {
-	console.log(player._physijs);
 	switch ( event.keyCode ) {
 
 		case 38: // up
@@ -113,7 +112,8 @@ var onKeyDown = function ( event ) {
 
 		case 37: // left
 		case 65: // a
-		moveLeft = true; break;
+		moveLeft = true;
+			break;
 
 		case 40: // down
 		case 83: // s
@@ -126,7 +126,8 @@ var onKeyDown = function ( event ) {
 		break;
 
 		case 32: // space
-		if ( canJump === true ) velocity.y += 12;
+			event.preventDefault();
+		if ( canJump === true ) velocity.y += 10;
 		canJump = false;
 		break;
 

@@ -22,26 +22,33 @@
 			top: 50%;
 			transform: translate3d(-50%, -50%, 0);
 		}
+
 		#progress::after {
 			position: absolute;
-			height: 50px; width: 50px;
+			height: 50px;
+			width: 50px;
 			border-radius: 50%;
 			background: #fff;
 			content: '';
 			transform: scale(0);
 		}
+
 		#progress {
 			position: absolute;
-			left: 50%; top: 50%;
-			height: 50px; width: 50px;
+			left: 50%;
+			top: 50%;
+			height: 50px;
+			width: 50px;
 			border-radius: 50%;
 			border: 2px solid #fff;
 			opacity: 0;
 			transform: translate3d(-50%, -50%, 0);
 		}
+
 		#progress.show {
 			opacity: 0.8;
 		}
+
 		#progress.show::after {
 			transform: scale(1);
 			transition: transform 400ms linear;
@@ -88,12 +95,12 @@
 		playerHeight = 2;
 		prevTime = performance.now();
 		velocity = new THREE.Vector3();
-		speed = 0.1;
+		speed = 4;
 		cubes = [];
 
 		scene.add(controls.getObject());
-		controls.getObject().position.set(mapSize/2, 2, mapSize/2);
-		renderer.setPixelRatio( 1 );
+		controls.getObject().position.set(mapSize / 2, 10, mapSize / 2);
+		renderer.setPixelRatio(1);
 		renderer.setSize(windowWidth, windowHeight);
 		renderer.shadowMap.enabled = true;
 		renderer.shadowMap.soft = false;
@@ -101,28 +108,27 @@
 		renderer.shadowMap.renderReverseSided = false;
 		document.body.appendChild(renderer.domElement);
 		stats = new Stats();
-		document.body.appendChild( stats.dom );
-
+		document.body.appendChild(stats.dom);
 
 //		 var axisHelper = new THREE.AxisHelper( 50 );
 //		 scene.add( axisHelper );
 
 		// init lighting
-		var ambientLight = new THREE.AmbientLight(0x666666);
+		var ambientLight = new THREE.AmbientLight(0x444444);
 		scene.add(ambientLight);
 		spotLight = new THREE.SpotLight(0x999999);
 		spotLight.position.set(70, 50, 0);
 		spotLight.castShadow = true;
-		spotLight.shadow.darkness = 0.1;
+//		spotLight.shadow.darkness = 5;
 		spotLight.shadow.camera.near = 30;
 		spotLight.shadow.camera.far = 100;
 		spotLight.shadow.camera.fov = 80;
-		spotLight.shadow.mapSize.width = 1024;
-		spotLight.shadow.mapSize.height = 1024;
+		spotLight.shadow.mapSize.width = 512;
+		spotLight.shadow.mapSize.height = 512;
 		spotLight.shadow.bias = -0.002;
 		scene.add(spotLight);
 //		 scene.add(new THREE.DirectionalLightHelper(directionalLight1));
-		 scene.add(new THREE.CameraHelper( spotLight.shadow.camera ));
+//		scene.add(new THREE.CameraHelper(spotLight.shadow.camera));
 //		scene.fog = new THREE.Fog(0x000000, 5, 20);
 
 		// load textures
@@ -160,7 +166,6 @@
 			blockWater: new THREE.MeshFaceMaterial([texture_water, texture_water, texture_water, texture_water, texture_water, texture_water])
 		};
 
-
 		// perlin noise terrain
 
 		noise.seed(Math.random());
@@ -173,7 +178,6 @@
 		}
 
 		// diamond square terrain
-		// var terrain = diamondSquareTerrain(5);
 		for (var i = 0; i < terrain.length; i++) {
 			for (var j = 0; j < terrain[i].length; j++) {
 				var height = terrain[i][j];
@@ -181,7 +185,7 @@
 				for (var h = 0; h <= height; h++) {
 					var cube2 = null;
 					if (h === height) {
-						if(h === 0) {
+						if (h === 0) {
 							cube = new THREE.Mesh(geometryBlock, texture_dirt, 0);
 							cube2 = new THREE.Mesh(geometryWater, texture_water, 0);
 						} else {
@@ -193,10 +197,9 @@
 					cube.castShadow = true;
 					cube.receiveShadow = true;
 					cube.position.set(i + 0.5, h, j + 0.5);
-//					cubes.push(cube);
 					scene.add(cube);
 
-					if(cube2) {
+					if (cube2) {
 						cube2.position.set(i + 0.5, h + 1 - 0.1, j + 0.5);
 						scene.add(cube2);
 					}
@@ -204,98 +207,73 @@
 			}
 		}
 
-//		player = new THREE.Mesh(geometryBlock, texture_dirt);
-//
-//		player.position.set(0, 10, -10);
-//		player.castShadow = true;
-//		scene.add(player);
-
 		render();
 	}
 
-	function getObjectAtCursor() {
+	function getObjectAtCursor () {
 		raycaster.ray.origin.copy(controls.getObject().position);
 		raycaster.ray.direction.copy(camera.getWorldDirection());
 		// raycaster.ray.far = 3;
 		var intersections = raycaster.intersectObjects(scene.children);
-		if(intersections.length) {
+		if (intersections.length) {
 			return intersections[0].object;
 		}
 		return null;
 	}
 
-	function removeObject(object) {
+	function removeObject (object) {
 		object && scene.remove(object);
-//		var pos = object.position;
-//		terrain[Math.floor(pos.x)][Math.floor(pos.z)]--;
+	}
+
+	function getCurrentCellHeight () {
+		raycaster.ray.origin.copy(controls.getObject().position);
+		raycaster.ray.direction.copy(new THREE.Vector3(0, -1, 0));
+		var intersections = raycaster.intersectObjects(scene.children);
+		if (intersections.length) {
+			return Math.floor(intersections[0].object.position.y);
+		}
 	}
 
 	// game loop
-//	var startTime = Date.now();
 	var prevTime;
 	function render () {
-		var prevx = Math.floor(controls.getObject().position.x);
-		var prevz = Math.floor(controls.getObject().position.z);
-		var prevcellHeight = terrain[prevx][prevz];
+		controls.enabled && requestAnimationFrame(render);
 
-		requestAnimationFrame(render);
-//		checkControls();
+		var time = performance.now();
+		var delta = ( time - prevTime ) / 1000;
+		var prevcellheight = getCurrentCellHeight();
+
+		moveForward && controls.getObject().translateZ(-speed * delta);
+		moveBackward && controls.getObject().translateZ(speed * delta);
+		moveLeft && controls.getObject().translateX(-speed * delta);
+		moveRight && controls.getObject().translateX(speed * delta);
+
+		var nextcellheight = getCurrentCellHeight();
+		if (nextcellheight > prevcellheight && canJump) {
+			moveForward && controls.getObject().translateZ(speed * delta);
+			moveBackward && controls.getObject().translateZ(-speed * delta);
+			moveLeft && controls.getObject().translateX(speed * delta);
+			moveRight && controls.getObject().translateX(-speed * delta);
+		}
+
+		var currentcellheight = getCurrentCellHeight();
+
+		velocity.y -= 35 * delta;
+		controls.getObject().translateY(velocity.y * delta);
+
+		if (controls.getObject().position.y < currentcellheight + playerHeight) {
+			velocity.y = 0;
+			controls.getObject().position.y = currentcellheight + playerHeight;
+			canJump = true;
+		}
+
+		prevTime = time;
+
 //		 var currentTime = Date.now();
 //		 var elapsedTime = (currentTime - startTime)/1000;
 //		 var localTime = ((elapsedTime % 1200) / 1200) + 0.85;
 //		 spotLight.position.y = 30 * Math.cos(localTime * 2 * Math.PI);
 //		 spotLight.position.x = 30 * Math.sin(localTime * 2 * Math.PI);
-
-		if(moveForward) {
-			controls.getObject().translateZ(-speed);
-		}
-		if(moveBackward) {
-			controls.getObject().translateZ(speed);
-		}
-		if(moveLeft) {
-			controls.getObject().translateX(-speed);
-		}
-		if(moveRight) {
-			controls.getObject().translateX(speed);
-		}
-
-		var x = Math.floor(controls.getObject().position.x);
-		var z = Math.floor(controls.getObject().position.z);
-		var cellheight = terrain[x][z];
-
-		if(cellheight > prevcellHeight && canJump) {
-			if(moveForward) {
-				controls.getObject().translateZ(speed);
-			}
-			if(moveBackward) {
-				controls.getObject().translateZ(-speed);
-			}
-			if(moveLeft) {
-				controls.getObject().translateX(speed);
-			}
-			if(moveRight) {
-				controls.getObject().translateX(-speed);
-			}
-		}
-
-		x = Math.floor(controls.getObject().position.x);
-		z = Math.floor(controls.getObject().position.z);
-		cellheight = terrain[x][z];
-
-		var time = performance.now();
-		var delta = ( time - prevTime ) / 1000;
-
-		velocity.y -= 35 * delta;
-		controls.getObject().translateY( velocity.y * delta );
-
-		if ( controls.getObject().position.y < cellheight + playerHeight ) {
-
-			velocity.y = 0;
-			controls.getObject().position.y = cellheight + playerHeight;
-			canJump = true;
-
-		}
-		prevTime = time;
 
 		stats.update();
 		renderer.render(scene, camera);

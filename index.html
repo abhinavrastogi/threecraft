@@ -102,7 +102,7 @@
 		controls.getObject().position.set(mapSize / 2, 10, mapSize / 2);
 		renderer.setPixelRatio(1);
 		renderer.setSize(windowWidth, windowHeight);
-		renderer.shadowMap.enabled = true;
+//		renderer.shadowMap.enabled = true;
 		renderer.shadowMap.soft = false;
 		renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 		renderer.shadowMap.renderReverseSided = false;
@@ -138,19 +138,19 @@
 				texture_water = new THREE.MeshLambertMaterial(),
 				texture_dirt = new THREE.MeshLambertMaterial();
 
-		loader.load('/images/grass.png', function (texture) {
+		loader.load('images/grass.png', function (texture) {
 			texture_grass_top.map = texture;
 			texture_grass_top.needsUpdate = true;
 		});
-		loader.load('/images/grass_dirt.png', function (texture) {
+		loader.load('images/grass_dirt.png', function (texture) {
 			texture_grass_side.map = texture;
 			texture_grass_side.needsUpdate = true;
 		});
-		loader.load('/images/dirt.png', function (texture) {
+		loader.load('images/dirt.png', function (texture) {
 			texture_dirt.map = texture;
 			texture_dirt.needsUpdate = true;
 		});
-		loader.load('/images/water.jpg', function (texture) {
+		loader.load('images/water.jpg', function (texture) {
 			texture_water.map = texture;
 			texture_water.transparent = true;
 			texture_water.opacity = 0.7;

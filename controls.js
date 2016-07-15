@@ -91,6 +91,7 @@ function request () {
 	var element = renderer.domElement;
 	document.addEventListener('pointerlockchange', function (event) {
 		controls.enabled = document.pointerLockElement === element;
+		document.getElementById('instructions').style.display = 'none';
 		render();
 	}, false);
 

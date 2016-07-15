@@ -6,6 +6,7 @@
 	<style>
 		body {
 			margin: 0;
+			font-family: Helvetica, Arial, sans-serif;
 		}
 
 		canvas {
@@ -53,11 +54,28 @@
 			transform: scale(1);
 			transition: transform 400ms linear;
 		}
+		#instructions {
+			background: rgba(0, 0, 0, 0.7);
+			padding: 10px 30px;
+			border-radius: 3px;
+			margin: 10px;
+			text-align: center;
+			color: #fff;
+			position: absolute;
+			left: 50%;
+			transform: translateX(-50%);
+			font-size: 12px;
+		}
 	</style>
 </head>
 <body>
 <div id="crosshair">+</div>
 <div id="progress"></div>
+<div id="instructions">
+	Click to start. Allow mouse pointer lock.<br/>
+	Hold LMB to destroy block.<br/>
+	Click RMB to place block.
+</div>
 <script src="three.js"></script>
 <script src="pointerLock.js"></script>
 <script src="terrain.js"></script>
